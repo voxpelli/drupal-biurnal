@@ -431,8 +431,8 @@ class Biurnal {
   
     foreach ($this->css as $css) {
       $name = basename($css);
-      $vars['biurnal'] .= '<link rel="stylesheet" href="/'. $this->scheme_path .'/'. $name .'" type="text/css">'."\n";
-      $vars['biurnal'] .= '<!--[if lte IE 7]><link rel="stylesheet" href="/'. $this->scheme_path .'/ie.'. $name .'" type="text/css"><![endif]-->'."\n";
+      $vars['biurnal'] .= '<link rel="stylesheet" href="/'. $this->scheme_path .'/'. $name .'" type="text/css" />'."\n";
+      $vars['biurnal'] .= '<!--[if lte IE 7]><link rel="stylesheet" href="/'. $this->scheme_path .'/ie.'. $name .'" type="text/css" /><![endif]-->'."\n";
     }
   }
   
