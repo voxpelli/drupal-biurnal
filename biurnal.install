@@ -1,0 +1,14 @@
+<?php
+// $Id$
+function biurnal_install() {
+  db_query("CREATE TABLE if not exists {biurnal_configuration} (
+    nid int(10) unsigned NOT NULL PRIMARY KEY,
+    configuration text NOT NULL
+  )");
+}
+
+function biurnal_uninstall() {
+  if (db_table_exists('biurnal_configuration')) {
+    db_query("DROP TABLE {biurnal_configuration}");
+  }
+}

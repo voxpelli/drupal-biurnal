@@ -1,0 +1,644 @@
+<?php
+// $Id$
+require('biurnal.hsb.php');
+
+global $_biurnal_;
+$_biurnal_ = new Biurnal();
+
+//require('biurnal.admin.php');
+require('biurnal.actions.php');
+require('biurnal.node.php');
+
+function biurnal_perm() {
+  return array('view biurnal node', 'edit own biurnal node', 'create biurnal node', 'edit all biurnal nodes', 'preview biurnal scheme');
+}
+
+function biurnal_init() {
+  global $_biurnal_;
+  $_biurnal_->init();
+  if (is_callable('actions_synchronize'))
+    actions_synchronize(False, True);
+}
+
+function biurnal_cron() {
+  global $_biurnal_;
+  $_biurnal_->cron();
+}
+
+function biurnal_hook_info() {
+  return array(
+    'biurnal' => array(
+      'scheme' => array(
+        'load' => array(
+          'runs when' => t('When a new color scheme has been loaded')
+        ),
+        'saved' => array(
+          'runs when' => t('When the site color scheme has been saved')
+        ),
+        'pre_save' => array(//TODO: Invoke
+          'runs when' => t('Before a color scheme is saved')
+        ),
+      )
+    )
+  );
+}
+
+function biurnal_menu($may_cache)
+{
+  $items = array();
+  if ($may_cache) {
+    $items[] = array(
+      'path' => 'biurnal/preview',
+      'title' => t('Preview color scheme'),
+      'callback' => 'biurnal_preview_scheme',
+      'access' => user_access('preview biurnal scheme'),
+      'type' => MENU_CALLBACK,
+    );
+  }
+  else {
+    global $_biurnal_;
+    if ($_biurnal_->preview_scheme()) {
+      $items[] = array(
+        'path' => 'biurnal/stop_preview',
+        'title' => t('Stop preview of color scheme'),
+        'callback' => 'biurnal_preview_scheme',
+        'access' => user_access('preview biurnal scheme'),
+        'type' => MENU_NORMAL_ITEM,
+      );
+    }
+  }
+
+  return $items;
+}
+
+function biurnal_preview_scheme($nid=Null) {
+  global $_biurnal_;
+  if (isset($nid)) {
+    $_biurnal_->preview_scheme($nid);
+  }
+  else {
+    $_biurnal_->stop_preview();
+  }
+  drupal_goto('');
+}
+
+function biurnal_preprocess_page(&$vars)
+{
+  global $_biurnal_;
+  $_biurnal_->preprocess($vars);
+}
+
+class Biurnal {
+  private $images;
+  private $colors;
+  private $css;
+  private $processes;
+  private $filters;
+  private $operations;
+  
+  function __construct() {
+    $this->images = array();
+    $this->colors = array();
+    $this->css = array();
+    $this->processes = array();
+    $this->filters = array();
+    $this->operations = array();
+    
+    $this->filters['mix'] = array($this, 'mix_colors');
+    $this->filters['shift_hue'] = 'biurnal_shift_hue';
+    $this->filters['brightness'] = 'biurnal_set_brightness';
+    $this->filters['saturation'] = 'biurnal_set_saturation';
+    $this->filters['brightness_and_saturation'] = 'biurnal_set_brightness_and_saturation';
+    $this->filters['match_brightness'] = 'biurnal_match_brightness';
+    $this->filters['match_saturation'] = 'biurnal_match_saturation';
+    $this->filters['match'] = 'biurnal_match_saturation_and_brightness';
+    
+    $this->operations['clear'] = array($this, 'clear_to_color');
+    $this->operations['clear_gradient'] = array($this, 'clear_to_gradient');
+  }
+  
+  public function init() {
+    $this->biurnal_path = file_directory_path() .'/biurnal';
+    if (!is_dir($this->biurnal_path))
+      mkdir($this->biurnal_path);
+      
+    $this->biurnal_backgrounds = $this->biurnal_path .'/backgrounds';
+    if (!is_dir($this->biurnal_backgrounds))
+      mkdir($this->biurnal_backgrounds);
+  }
+  
+  public function resolve_path($path, $base) {
+    if (substr($path, 0, 1)!="/")
+      $path = '/'. $path;
+    $path = realpath('./'. $base . $path);
+    return $path;
+  }
+  
+  public function load_json($json, $base_path=Null, $is_file=true) {
+    $content = $json;
+    if ($is_file) {
+      if (is_file($json))
+        $content = file_get_contents($json);
+      else
+        return;
+        
+      if (!isset($base_path))
+        $base_path = dirname($json);
+    }
+
+    $data = json_decode($content, true);
+    if (isset($data)) {
+      foreach ($data as $key => $values) {
+        switch ($key) {
+          case 'colors':
+            foreach ($values as $name => $color)
+              $this->set_color($name, intval($color, 16));
+            break;
+          case 'css':
+            foreach ($values as $path)
+              $resolved_path = $this->resolve_path($path, $base_path);
+              
+              if ($resolved_path) {
+                $this->add_css($resolved_path);
+              }
+              else {
+                drupal_set_message(t('Biurnal could not find the css file "%path"', 
+                  array(
+                    '%path' => $path,
+                  )), 'error');
+              }
+              
+            break;
+          case 'images':
+            foreach ($values as $dir => $images) {
+              $i = 0;
+              foreach ($images as $image) {
+                $i++;
+                $path = $this->resolve_path($image['path'], $base_path);
+                $properties = isset($image['properties'])?$image['properties']:array();
+                if ($path) {
+                  $this->add_image($path, $image['alter'], $dir, $properties);
+                }
+                else {
+                  drupal_set_message(t('Biurnal could not find the image file "%path", number %current of %count in "%dir"', 
+                    array(
+                      '%path' => $image['path'],
+                      '%current' => $i,
+                      '%count' => count($images),
+                      '%dir' => $dir,
+                    )), 'error');
+                }
+              }
+            }
+            break;
+          case 'processes':
+            foreach ($values as $name => $process) {
+              $this->add_process($name, $process);
+            }
+            break;
+        }
+      }
+    } 
+    else {
+      drupal_set_message(t('Could not parse biurnal json data'), 'error');
+    }
+  }
+  
+  public function mix_colors($a, $b, $proportions=0.5) {
+    list($r1, $g1, $b1) = $a;
+    list($r2, $g2, $b2) = $b;
+    $r = ( $r2 - $r1 != 0 ) ? intval( $r1 + ( $r2 - $r1 ) * $proportions ): $r1;
+    $g = ( $g2 - $g1 != 0 ) ? intval( $g1 + ( $g2 - $g1 ) * $proportions ): $g1;
+    $b = ( $b2 - $b1 != 0 ) ? intval( $b1 + ( $b2 - $b1 ) * $proportions ): $b1;  
+    return array($r, $g, $b);
+  }
+  
+  public function add_colors($a, $b, $proportions=0.5) {
+    list($r1, $g1, $b1) = $a;
+    list($r2, $g2, $b2) = $b;
+    $c = array($r1+$r2, $g1+$g2, $b1+$b2);
+    
+    return $c();
+  }
+  
+  public function clear_to_color($image, $color=Null) {
+    $width = imagesx($image);
+    $height = imagesy($image);
+    imagedestroy($image);
+    $background = imagecreatetruecolor($width, $height);
+
+    $bg_color = -1;
+    if (isset($color)) {
+      $bg_color = imagecolorallocate($background, $color[0], $color[1], $color[2]);
+    } 
+    else
+      $bg_color = imagecolorallocatealpha($background, 0, 0, 0, 0);
+      
+    imagefilledrectangle($background, 0, 0, $width, $height, $bg_color);
+    
+    return $background;
+  }
+  
+  public function clear_to_gradient($image, $color_a, $color_b, $direction="vertical") {
+    list($r1, $g1, $b1) = $color_a;
+    list($r2, $g2, $b2) = $color_b;
+    
+    $width = imagesx($image);
+    $height = imagesy($image);
+    imagedestroy($image);
+    
+    $background = imagecreatetruecolor($width, $height);
+    
+    for ($i=0; $i<$height; $i++) {
+      $r = ( $r2 - $r1 != 0 ) ? intval( $r1 + ( $r2 - $r1 ) * ($i/$height) ): $r1;
+      $g = ( $g2 - $g1 != 0 ) ? intval( $g1 + ( $g2 - $g1 ) * ($i/$height) ): $g1;
+      $b = ( $b2 - $b1 != 0 ) ? intval( $b1 + ( $b2 - $b1 ) * ($i/$height) ): $b1;
+      
+      imagefilledrectangle($background, 0, $i, $width-1, $i, imagecolorallocate($background, $r, $g, $b));
+    }
+    
+    return $background;
+  }
+  
+  private function resolve_params($params) {
+    $args = array();
+    foreach ($params as $param) {
+      if (is_string($param) && substr($param, 0, 1)=='$') {
+        $args[]=$this->color(substr($param, 1));
+      } 
+      else if (is_string($param) && substr($param, 0, 2)=="0x") {
+        $args[]=$this->intrgb(intval(substr($param, 2), 16));
+      }
+      else if (is_string($param) && substr($param, 0, 2)=="##") {
+        $args[]=$this->to_hsl_triplet(substr($param, 2));
+      }
+      else if (is_string($param) && substr($param, 0, 1)=="#") {
+        $args[]=$this->intrgb(intval(substr($param, 1), 16));
+      } 
+      else if (is_array($param)) {
+        foreach ($param as $filter => $fparams) {
+          $args[] = $this->run_filter($filter, $fparams);
+          break;
+        }
+      } 
+      else
+        $args[] = $param;
+    }
+    return $args;
+  }
+  
+  private function run_filter($name, $params) {
+    if (!isset($this->filters[$name]))
+      return Null;
+    $args = $this->resolve_params($params);
+    $res = call_user_func_array($this->filters[$name], $args);
+    return $res;
+  }
+  
+  private function scheme_identifier() {
+    $ident = '';
+    foreach ($this->colors as $name => $color)
+      $ident .= substr($name, 0, 1) . substr($this->color_to_hex($color), 1);
+    
+    if (strlen($ident)>32)
+      $ident = md5($ident);
+    return $ident;
+  }
+  
+  public static function theme_head()
+  {
+    global $_biurnal_;
+    $vars = array();
+    $_biurnal_->preprocess($vars,'page');
+    return $vars['biurnal'];
+  }
+  
+  public function preprocess(&$vars) {
+    $theme_name = basename(path_to_theme());
+  
+    $this->biurnal_theme_path = path_to_theme() .'/biurnal';
+    if (is_dir($this->biurnal_theme_path)) {
+      $this->load_json($this->biurnal_theme_path .'/biurnal.json');
+    }
+  
+    if (function_exists('path_to_subtheme')) {
+      $theme_name = basename(path_to_subtheme());
+      $this->biurnal_theme_path = path_to_subtheme() .'/biurnal';
+      if (is_dir($this->biurnal_theme_path)) {
+        $this->load_json($this->biurnal_theme_path .'/biurnal.json');
+      }
+    }
+
+    //Do some loading of colors/settings
+    if($vars['node'] && $vars['node']->type=="biurnal") {
+      $scheme = $vars['node'];
+    }
+    else {
+      $scheme = $this->get_scheme();
+    }
+    
+    if($scheme)
+    {
+      $palette = $scheme->palette[$theme_name];
+      foreach ($palette as $name => $color) {
+        $this->update_color($name, intval(substr($color, 1), 16));
+      }
+    }
+    module_invoke_all('biurnal_scheme_load', $this);
+    
+    foreach($this->colors as $name => $color) {
+      $vars['colors'][$name] = $this->color_to_hex($color);
+      $vars['colors'][$name .'_triplet'] = $color;
+    }
+  
+    //Make sure that the scheme exists
+    $this->scheme_path = sprintf('%s/%s/%s', $this->biurnal_path, $theme_name, $this->scheme_identifier());
+    if (!is_dir($this->scheme_path))
+      mkdir($this->scheme_path, 0777, true);
+    
+    //Create new images
+    foreach ($this->images as $dir_name => $images) {
+      $dir = $this->scheme_path .'/'. $dir_name;
+      if (!is_dir($dir))
+        mkdir($dir);
+      
+      foreach ($images as $image) {
+        list($width, $height) = getimagesize($image['path']);
+        $img = imagecreatefrompng($image['path']);
+        $back = imagecreatetruecolor($width, $height);
+      
+        if (isset($image['alter'])) {
+          $processes = array();
+          foreach ($image['alter'] as $name)
+            if (isset($this->processes[$name]))
+              $processes[] = $this->processes[$name];
+        
+          foreach ($processes as $process) {
+            if (isset($process['background']))
+              $back = $this->apply_operations($back, $process['background']);
+            if (isset($process['front']))
+              $img = $this->apply_operations($img, $process['front']);
+          }
+        }
+      
+        imagecopy($back, $img, 0, 0, 0, 0, $width, $height);
+      
+        $file = $dir .'/'. basename($image['path']);
+        if (file_exists($file))
+          unlink($file);
+
+        imagepng($back, $file);
+      }
+    }
+  
+    //Process backgrounds
+    if (is_dir($this->biurnal_backgrounds) && isset($this->processes['page_background_process'])) {
+      $bg_dir = $this->scheme_path .'/backgrounds';
+      if (!is_dir($bg_dir))
+        mkdir($bg_dir);
+    
+      $bg_process = $this->processes['page_background_process'];
+      if ($dh = opendir($this->biurnal_backgrounds)) {
+        while (($file = readdir($dh)) !== false) {
+          if (substr($file, 0, 1)!='.') {
+            list($width, $height) = getimagesize($this->biurnal_backgrounds .'/'. $file);
+            $img = imagecreatefrompng($this->biurnal_backgrounds .'/'. $file);
+            $back = imagecreatetruecolor($width, $height);
+
+            if (isset($bg_process['background']))
+              $back = $this->apply_operations($back, $bg_process['background']);
+            if (isset($bg_process['front']))
+              $img = $this->apply_operations($img, $bg_process['front']);
+
+            imagecopy($back, $img, 0, 0, 0, 0, $width, $height);
+            imagejpeg($back, $bg_dir .'/'. basename($file, '.png') .'.jpg', 80);
+          }
+        }
+        closedir($dh);
+      }
+    }
+  
+    foreach ($this->css as $css) {
+      $name = basename($css);
+      $content = file_get_contents($css);
+      $content = preg_replace_callback('/\$(\{.*\})\$/', array($this, 'filter_callback'), $content);
+      $content = preg_replace_callback('/\$([_a-z]+)/', array($this, 'color_callback'), $content);
+      file_put_contents($this->scheme_path .'/ie.'. $name, $content);
+    
+      $content = preg_replace_callback('/url\(([^\)]+)\)/', array($this, 'data_url_callback'), $content);
+      file_put_contents($this->scheme_path .'/'. $name, $content);
+    }
+  
+    foreach ($this->css as $css) {
+      $name = basename($css);
+      $vars['biurnal'] .= '<link rel="stylesheet" href="/'. $this->scheme_path .'/'. $name .'" type="text/css">'."\n";
+      $vars['biurnal'] .= '<!--[if lte IE 7]><link rel="stylesheet" href="/'. $this->scheme_path .'/ie.'. $name .'" type="text/css"><![endif]-->'."\n";
+    }
+  }
+  
+  private function data_url_callback($matches) {
+    $path = $this->scheme_path .'/'. trim($matches[1]);
+    if (file_exists($path) && filesize($path)<800)  
+      return 'url(data:image/png;base64,'. base64_encode(file_get_contents($path)) .')';
+    return $matches[0];
+  }
+  
+  private function filter_callback($matches) {
+    $filter_def = json_decode($matches[1], true);
+    if ($filter_def) foreach ($filter_def as $filter => $fparams) {
+      $val = $this->run_filter($filter, $fparams);
+      if (is_array($val))
+        return $this->color_to_hex($val);
+      else
+        return $val;
+    }
+  }
+  
+  private function color_callback($matches) {
+    return $this->get_hex_color($matches[1]);
+  }
+  
+  private function apply_operations($img, $operations) {
+    foreach ($operations as $operation => $params) {
+      if (isset($this->operations[$operation])) {
+        $args = $this->resolve_params($params);
+        array_unshift($args, $img);
+        $img = call_user_func_array($this->operations[$operation], $args);
+      }
+    }
+    return $img;
+  }
+  
+  public function intrgb($int) {
+    return array(0xFF & ($int >> 0x10), 0xFF & ($int >> 0x8), 0xFF & $int);
+  }
+  
+  public function get_colors() {
+    return $this->colors;
+  }
+  
+  public function theme_is_biurnal($name) {
+    $file = drupal_get_path('theme', $name) .'/biurnal/biurnal.json';
+    return is_file($file);
+  }
+  
+  public function set_scheme($nid) {
+    variable_set('biurnal_scheme', $nid);
+  }
+  
+  public function get_colors_for_theme($name) {
+    $palette=array();
+    
+    $file = drupal_get_path('theme', $name) .'/biurnal/biurnal.json';  
+    $content = file_get_contents($file);
+    $data = json_decode($content, true);
+    if (isset($data) && isset($data['colors'])) {
+      foreach ($data['colors'] as $name => $color)
+        $palette[$name]='#'. $color;
+      return $palette;
+    } 
+    else {
+      drupal_set_message(t('Could not parse biurnal json data'), 'error');
+    }
+  }
+  
+  public function stop_preview() {
+    unset($_SESSION['biurnal_preview']);
+  }
+  
+  public function preview_scheme($nid=Null) {
+
+    if (isset($nid)) {
+      $_SESSION['biurnal_preview'] = $nid;
+      return true;
+    }
+    else {
+      if (isset($_SESSION['biurnal_preview'])) {
+        $nid = $_SESSION['biurnal_preview'];
+      }
+      
+      if (!empty($nid)) {
+        return $nid;
+      }
+      else {
+        return false;
+      }
+    }
+  }
+  
+  public function get_scheme() {
+    $nid = $this->preview_scheme();
+    
+    if (empty($nid)) {
+      $nid = variable_get('biurnal_scheme',0);
+    }
+    
+    if ($nid) {
+      $node = node_load($nid);
+      return $node;
+    }
+    else {
+      return false;
+    }
+  }
+  
+  public function color($name="main") {
+    if (isset($this->colors))
+      if (isset($this->colors[$name]))
+        return $this->colors[$name];
+    
+    return array(0, 0, 0);
+  }
+  
+  public function cron() {
+    
+  }
+  
+  public function add_image($path, $alter=Null, $dir='img', $properties=array()) {
+    $dir = basename($dir);
+    $this->images[$dir][] = array('path' => $path, 'alter' => $alter, 'properties' => $properties);
+  }
+  
+  public function add_process($name, $process) {
+    $this->processes[$name] = $process;
+  }
+  
+  public function set_color($name, $color) {
+    if (is_int($color))
+      $color = $this->intrgb($color);
+    $this->colors[$name]=$color;
+  }
+  
+  public function update_color($name, $color) {
+    if (isset($this->colors[$name]))
+      $this->set_color($name, $color);
+  }
+  
+  public function get_hex_color($name) {
+    $color = $this->color($name);
+    return sprintf('#%02x%02x%02x', $color[0], $color[1], $color[2]);
+  }
+  
+  public function color_to_hex($color) {
+    return sprintf('#%02x%02x%02x', $color[0], $color[1], $color[2]);
+  }
+  
+  public function add_css($path) {
+    $this->css[] = $path;
+  }
+  
+  private function to_hsl_triplet($str) {
+    $args = split(',', $str);
+    return array(intval($args[0]), intval($args[1]), intval($args[2]));
+  }
+  
+  /**
+   * Convert a HSL triplet into RGB
+   */
+  private function hsl2rgb($hsl) {
+    $h = $hsl[0];
+    $s = $hsl[1];
+    $l = $hsl[2];
+    $m2 = ($l <= 0.5) ? $l * ($s + 1) : $l + $s - $l*$s;
+    $m1 = $l * 2 - $m2;
+    return array($this->hue2rgb($m1, $m2, $h + 0.33333),
+                 $this->hue2rgb($m1, $m2, $h),
+                 $this->hue2rgb($m1, $m2, $h - 0.33333));
+  }
+
+  /**
+   * Helper function for hsl2rgb().
+   */
+  private function hue2rgb($m1, $m2, $h) {
+    $h = ($h < 0) ? $h + 1 : (($h > 1) ? $h - 1 : $h);
+    if ($h * 6 < 1) return $m1 + ($m2 - $m1) * $h * 6;
+    if ($h * 2 < 1) return $m2;
+    if ($h * 3 < 2) return $m1 + ($m2 - $m1) * (0.66666 - $h) * 6;
+    return $m1;
+  }
+
+  /**
+   * Convert an RGB triplet to HSL.
+   */
+  private function rgb2hsl($rgb) {
+    $r = $rgb[0];
+    $g = $rgb[1];
+    $b = $rgb[2];
+    $min = min($r, min($g, $b));
+    $max = max($r, max($g, $b));
+    $delta = $max - $min;
+    $l = ($min + $max) / 2;
+    $s = 0;
+    if ($l > 0 && $l < 1) {
+      $s = $delta / ($l < 0.5 ? (2 * $l) : (2 - 2 * $l));
+    }
+    $h = 0;
+    if ($delta > 0) {
+      if ($max == $r && $max != $g) $h += ($g - $b) / $delta;
+      if ($max == $g && $max != $b) $h += (2 + ($b - $r) / $delta);
+      if ($max == $b && $max != $r) $h += (4 + ($r - $g) / $delta);
+      $h /= 6;
+    }
+    return array($h, $s, $l);
+  }
+}

@@ -1,0 +1,28 @@
+/* $Id$ */
+.biurnal-form .biurnal-farbtastic-placeholder
+{
+  float: right;
+  margin-bottom: 6px;
+}
+
+.biurnal-form .palette
+{
+}
+
+.biurnal-form .form-item
+{
+  clear: left;
+}
+
+.biurnal-form .palette .form-item
+{
+  clear: none;
+  width: 95px;
+  float: left;
+}
+
+.biurnal-form .palette .form-item label
+{
+  line-height: 1em;
+  height: 2em;
+}
