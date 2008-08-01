@@ -107,9 +107,7 @@ function biurnal_views_default_views()
   $view->url = ''; 
   $view->use_pager = TRUE; 
   $view->nodes_per_page = '10'; 
-  $view->sort = array ( array ( 
-    'tablename' => 'node_data_field_publish_time', 'field' => 'field_publish_time_value', 'sortorder' => 'DESC', 'options' => '', 
-  ), );   
+  $view->sort = array ();   
   $view->argument = array ( ); 
   $view->field = array ( ); 
   $view->filter = array ( 
@@ -123,10 +121,9 @@ function biurnal_views_default_views()
     ),
   ); 
   $view->exposed_filter = array ( ); 
-  $view->requires = array('node_data_field_publish_time', 'node'); 
   $views[$view->name] = $view; 
   
-  return $view;
+  return $views;
 }
 
 class Biurnal {

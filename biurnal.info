@@ -3,4 +3,5 @@ name = "Biurnal"
 description = "Makes it possible to make color changes for a site"
 version = "5.x-0.1"
 core = "5.x"
+dependencies = views
 project = "biurnal"
