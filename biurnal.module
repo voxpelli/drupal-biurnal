@@ -20,29 +20,6 @@ function biurnal_init() {
     actions_synchronize(False, True);
 }
 
-function biurnal_cron() {
-  global $_biurnal_;
-  $_biurnal_->cron();
-}
-
-function biurnal_hook_info() {
-  return array(
-    'biurnal' => array(
-      'scheme' => array(
-        'load' => array(
-          'runs when' => t('When a new color scheme has been loaded')
-        ),
-        'saved' => array(
-          'runs when' => t('When the site color scheme has been saved')
-        ),
-        'pre_save' => array(//TODO: Invoke
-          'runs when' => t('Before a color scheme is saved')
-        ),
-      )
-    )
-  );
-}
-
 function biurnal_menu($may_cache)
 {
   $items = array();
@@ -109,7 +86,9 @@ function biurnal_views_default_views()
   $view->nodes_per_page = '10'; 
   $view->sort = array ();   
   $view->argument = array ( ); 
-  $view->field = array ( ); 
+  $view->field = array ( 
+    array ( 'tablename' => 'node', 'field' => 'nid', 'label' => '', ), 
+  );
   $view->filter = array ( 
     array ( 
       'tablename' => 'node', 'field' => 'type', 'operator' => 'OR', 
@@ -382,35 +361,45 @@ class Biurnal {
         $this->update_color($name, intval(substr($color, 1), 16));
       }
     }
-    module_invoke_all('biurnal_scheme_load', $this);
     
     foreach($this->colors as $name => $color) {
       $vars['colors'][$name] = $this->color_to_hex($color);
       $vars['colors'][$name .'_triplet'] = $color;
     }
   
-    //Make sure that the scheme exists
+    //Check if the sceme exists
     $this->scheme_path = sprintf('%s/%s/%s', $this->biurnal_path, $theme_name, $this->scheme_identifier());
-    if (!is_dir($this->scheme_path))
+    if (!is_dir($this->scheme_path)) {
       mkdir($this->scheme_path, 0777, true);
+    }
     
+    $this->process_scheme_resources();
+  
+    foreach ($this->css as $css) {
+      $name = basename($css);
+      $vars['biurnal'] .= '<link rel="stylesheet" href="/'. $this->scheme_path .'/'. $name .'" type="text/css" />'."\n";
+      $vars['biurnal'] .= '<!--[if lte IE 7]><link rel="stylesheet" href="/'. $this->scheme_path .'/ie.'. $name .'" type="text/css" /><![endif]-->'."\n";
+    }
+  }
+  
+  private function process_scheme_resources() {
     //Create new images
     foreach ($this->images as $dir_name => $images) {
       $dir = $this->scheme_path .'/'. $dir_name;
       if (!is_dir($dir))
         mkdir($dir);
-      
+
       foreach ($images as $image) {
         list($width, $height) = getimagesize($image['path']);
         $img = imagecreatefrompng($image['path']);
         $back = imagecreatetruecolor($width, $height);
-      
+
         if (isset($image['alter'])) {
           $processes = array();
           foreach ($image['alter'] as $name)
             if (isset($this->processes[$name]))
               $processes[] = $this->processes[$name];
-        
+
           foreach ($processes as $process) {
             if (isset($process['background']))
               $back = $this->apply_operations($back, $process['background']);
@@ -418,9 +407,9 @@ class Biurnal {
               $img = $this->apply_operations($img, $process['front']);
           }
         }
-      
+
         imagecopy($back, $img, 0, 0, 0, 0, $width, $height);
-      
+
         $file = $dir .'/'. basename($image['path']);
         if (file_exists($file))
           unlink($file);
@@ -428,13 +417,13 @@ class Biurnal {
         imagepng($back, $file);
       }
     }
-  
+
     //Process backgrounds
     if (is_dir($this->biurnal_backgrounds) && isset($this->processes['page_background_process'])) {
       $bg_dir = $this->scheme_path .'/backgrounds';
       if (!is_dir($bg_dir))
         mkdir($bg_dir);
-    
+
       $bg_process = $this->processes['page_background_process'];
       if ($dh = opendir($this->biurnal_backgrounds)) {
         while (($file = readdir($dh)) !== false) {
@@ -455,22 +444,17 @@ class Biurnal {
         closedir($dh);
       }
     }
-  
+    
+    //Process css files
     foreach ($this->css as $css) {
       $name = basename($css);
       $content = file_get_contents($css);
       $content = preg_replace_callback('/\$(\{.*\})\$/', array($this, 'filter_callback'), $content);
       $content = preg_replace_callback('/\$([_a-z]+)/', array($this, 'color_callback'), $content);
       file_put_contents($this->scheme_path .'/ie.'. $name, $content);
-    
+
       $content = preg_replace_callback('/url\(([^\)]+)\)/', array($this, 'data_url_callback'), $content);
       file_put_contents($this->scheme_path .'/'. $name, $content);
-    }
-  
-    foreach ($this->css as $css) {
-      $name = basename($css);
-      $vars['biurnal'] .= '<link rel="stylesheet" href="/'. $this->scheme_path .'/'. $name .'" type="text/css" />'."\n";
-      $vars['biurnal'] .= '<!--[if lte IE 7]><link rel="stylesheet" href="/'. $this->scheme_path .'/ie.'. $name .'" type="text/css" /><![endif]-->'."\n";
     }
   }
   
@@ -566,6 +550,18 @@ class Biurnal {
   
   public function get_scheme() {
     $nid = $this->preview_scheme();
+
+    if (empty($nid) && module_exists('views')) {
+      $view = views_get_view('biurnal_active_scheme');
+      
+      if ($view) {
+        $res = views_build_view('items', $view, null, false, 1, 0, 0, array());
+
+        if ($res['items'] && count($res['items'])) {
+          $nid = $res['items'][0]->nid;
+        }
+      }
+    }
     
     if (empty($nid)) {
       $nid = variable_get('biurnal_scheme',0);
@@ -573,6 +569,7 @@ class Biurnal {
     
     if ($nid) {
       $node = node_load($nid);
+      dfb('Using scheme: '. $node->title);
       return $node;
     }
     else {
@@ -586,10 +583,6 @@ class Biurnal {
         return $this->colors[$name];
     
     return array(0, 0, 0);
-  }
-  
-  public function cron() {
-    
   }
   
   public function add_image($path, $alter=Null, $dir='img', $properties=array()) {
