@@ -237,7 +237,7 @@ class Biurnal {
     list($r2, $g2, $b2) = $b;
     $c = array($r1+$r2, $g1+$g2, $b1+$b2);
     
-    return $c();
+    return $c;
   }
   
   private function image_reference($reference, $obj) {
