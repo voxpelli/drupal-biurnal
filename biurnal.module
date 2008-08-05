@@ -132,6 +132,7 @@ class Biurnal {
     
     $this->operations['clear'] = array($this, 'clear_to_color');
     $this->operations['clear_gradient'] = array($this, 'clear_to_gradient');
+    $this->operations['mask'] = array($this, 'mask');
   }
   
   public function init() {
@@ -193,6 +194,7 @@ class Biurnal {
                 $i++;
                 $path = $this->resolve_path($image['path'], $base_path);
                 $properties = isset($image['properties'])?$image['properties']:array();
+                $properties['base_path'] = $base_path;
                 if ($path) {
                   $this->add_image($path, $image['alter'], $dir, $properties);
                 }
@@ -238,7 +240,88 @@ class Biurnal {
     return $c();
   }
   
-  public function clear_to_color($image, $color=Null) {
+  private function image_reference($reference, $obj) {
+    $matches = array();
+    if(preg_match('/^\$([^\/])\/(.+)$/',$reference,$matches)){
+      return $this->scheme_path .'/'. $matches[1] .'/'. $matches[2];
+    }
+    else {
+      return $this->resolve_path($reference, $obj['properties']['base_path']);
+    }
+  }
+  
+  public function mask($obj, $image, $mask_image) {
+    $path = $this->image_reference($mask_image, $obj);
+    if (file_exists($path)) {
+      $mask = imagecreatefrompng($path);
+      
+      if ($mask) {
+        $width = min(imagesx($mask),imagesx($image));
+        $height = min(imagesy($mask),imagesy($image));
+        $composite = imagecreatetruecolor($width, $height);
+        imagesavealpha($composite, true);
+        $trans_colour = imagecolorallocatealpha($composite, 0, 0, 0, 127);
+        imagefill($composite, 0, 0, $trans_colour);
+
+        for ($x=0; $x<$width; $x++) {
+          for ($y=0; $y<$height; $y++) {
+            //Extract red channel from mask pixel
+            $mask_rgb = imagecolorat($mask,$x,$y);
+            $mask_alpha = max(127 - (($mask_rgb & 0xFF0000) >> 16) / 2, 0);
+
+            //Extract color channels from image
+            $rgb = imagecolorat($image,$x,$y);
+            $red = ($rgb & 0xFF0000) >> 16;
+            $green = ($rgb & 0x00FF00) >> 8;
+            $blue = ($rgb & 0x0000FF);
+            
+            $color = imagecolorallocatealpha($composite, $red, $green, $blue, $mask_alpha);
+            imagesetpixel($composite, $x, $y, $color);
+          }
+        }
+    
+        imagedestroy($image);
+        return $composite;
+      }
+    }
+    return $image;
+  }
+  
+  public function copy_preserve_alpha($obj, $image, $color=Null) {
+    $width = imagesx($image);
+    $height = imagesy($image);
+    $background = imagecreatetruecolor($width, $height);
+
+    $bg_color = -1;
+    if (isset($color)) {
+      $bg_color = imagecolorallocate($background, $color[0], $color[1], $color[2]);
+    } 
+    else
+      $bg_color = imagecolorallocatealpha($background, 0, 0, 0, 0);
+      
+    imagefilledrectangle($background, 0, 0, $width, $height, $bg_color);
+    imagecopy($background, $image, 0, 0, 0, 0, $width, $height);
+    
+    for($x=0; $x<$width; $x++) {
+      for($y=0; $y<$width; $y++) {
+        $b_rgba = imagecolorat($background,$x,$y);
+        $i_rgba = imagecolorat($image,$x,$y);
+
+        $alpha = ($i_rgba & 0x7F000000) >> 24;
+        $red = ($b_rgba & 0xFF0000) >> 16;
+        $green = ($b_rgba & 0x00FF00) >> 8;
+        $blue = ($b_rgba & 0x0000FF);
+
+        $c = imagecolorallocatealpha($image, $red, $green, $blue, $alpha);
+        imagesetpixel($image, $x, $y, $c);
+      }
+    }
+    imagedestroy($background);
+    
+    return $image;
+  }
+  
+  public function clear_to_color($obj, $image, $color=Null) {
     $width = imagesx($image);
     $height = imagesy($image);
     imagedestroy($image);
@@ -256,7 +339,7 @@ class Biurnal {
     return $background;
   }
   
-  public function clear_to_gradient($image, $color_a, $color_b, $direction="vertical") {
+  public function clear_to_gradient($obj, $image, $color_a, $color_b, $direction="vertical") {
     list($r1, $g1, $b1) = $color_a;
     list($r2, $g2, $b2) = $color_b;
     
@@ -279,7 +362,12 @@ class Biurnal {
   
   private function resolve_params($params) {
     $args = array();
-    foreach ($params as $param) {
+    
+    if(!isset($params)) {
+      return $args;
+    }
+      
+    foreach ((array)$params as $param) {
       if (is_string($param) && substr($param, 0, 1)=='$') {
         $args[]=$this->color(substr($param, 1));
       } 
@@ -327,7 +415,7 @@ class Biurnal {
     global $_biurnal_;
     $vars = array();
     $_biurnal_->preprocess($vars,'page');
-    return $vars['biurnal'];
+    return $vars['biurnal']; 
   }
   
   public function preprocess(&$vars) {
@@ -392,23 +480,44 @@ class Biurnal {
       foreach ($images as $image) {
         list($width, $height) = getimagesize($image['path']);
         $img = imagecreatefrompng($image['path']);
+        
+        //Transparent background
         $back = imagecreatetruecolor($width, $height);
+        imagesavealpha($back, true);
+        $trans_colour = imagecolorallocatealpha($back, 0, 0, 0, 127);
+        imagefill($back, 0, 0, $trans_colour);
 
+        $processes = null;
         if (isset($image['alter'])) {
           $processes = array();
-          foreach ($image['alter'] as $name)
-            if (isset($this->processes[$name]))
-              $processes[] = $this->processes[$name];
+          foreach ($image['alter'] as $p) {
+            if (is_array($p)) {
+              $processes[] = $p;
+            }
+            else if (is_string($p) && isset($this->processes[$p])) {
+              $processes[] = $this->processes[$p];
+            }
+          }
 
+          //Run foreground and background processes
           foreach ($processes as $process) {
             if (isset($process['background']))
-              $back = $this->apply_operations($back, $process['background']);
-            if (isset($process['front']))
-              $img = $this->apply_operations($img, $process['front']);
+              $back = $this->apply_operations($image, $back, $process['background']);
+            if (isset($process['foreground']))
+              $img = $this->apply_operations($image, $img, $process['foreground']);
           }
         }
 
         imagecopy($back, $img, 0, 0, 0, 0, $width, $height);
+        
+        //Run postpreocess operations
+        if (isset($processes)) {
+          foreach ($processes as $process) {
+            if (isset($process['postprocess'])) {
+              $back = $this->apply_operations($image, $back, $process['postprocess']);
+            }
+          }
+        }
 
         $file = $dir .'/'. basename($image['path']);
         if (file_exists($file))
@@ -480,11 +589,11 @@ class Biurnal {
     return $this->get_hex_color($matches[1]);
   }
   
-  private function apply_operations($img, $operations) {
+  private function apply_operations($obj, $img, $operations) {
     foreach ($operations as $operation => $params) {
       if (isset($this->operations[$operation])) {
         $args = $this->resolve_params($params);
-        array_unshift($args, $img);
+        array_unshift($args, $obj, $img);
         $img = call_user_func_array($this->operations[$operation], $args);
       }
     }
@@ -569,7 +678,6 @@ class Biurnal {
     
     if ($nid) {
       $node = node_load($nid);
-      dfb('Using scheme: '. $node->title);
       return $node;
     }
     else {
