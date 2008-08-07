@@ -83,12 +83,12 @@ function biurnal_insert(&$node, $is_update=False) {
       $palette = $_biurnal_->get_colors_for_theme($theme->name);
       foreach( $palette as $name => $value ) {
         $field_name = 'biurnal_color_'. $theme->name .'_'. $name;
-        $scheme[$theme->name][$name] = $node->$field_name;
+        $node->palette[$theme->name][$name] = $node->$field_name;
       }
     }
   }
-  
-  $configuration = serialize($scheme);
+
+  $configuration = serialize($node->palette);
   if (!$is_update) {
     db_query("INSERT INTO {biurnal_configuration} (nid, configuration) VALUES (%d, '%s')", $node->nid, $configuration);
   }
@@ -100,10 +100,27 @@ function biurnal_insert(&$node, $is_update=False) {
 function biurnal_load(&$node) {
   global $_biurnal_;
   
+  //Fetch config from database
   $bc = db_fetch_object(db_query('SELECT configuration FROM {biurnal_configuration} WHERE nid = %d', $node->nid));
+  if ($bc) {
+    $node->palette = unserialize($bc->configuration);
+  }
   
-  $biurnal = new stdClass();
-  $biurnal->palette = unserialize($bc->configuration);
+  //Get default configuration if load failed
+  if(!isset($node->palette) || !$node->palette) {
+    $themes = list_themes();
+    $scheme = array();
+    foreach ($themes as $theme) {
+      if ($theme->status && $_biurnal_->theme_is_biurnal($theme->name)) {
+        $palette = $_biurnal_->get_colors_for_theme($theme->name);
+        foreach( $palette as $name => $value ) {
+          $field_name = 'biurnal_color_'. $theme->name .'_'. $name;
+          $scheme[$theme->name][$name] = $node->$field_name;
+        }
+      }
+    }
+    $biurnal->palette = $scheme;
+  }
 
   if($_biurnal_->preview_scheme() == $node->nid) {
     $node->body = l(t('Stop previewing scheme'), 'biurnal/stop_preview');
@@ -112,7 +129,7 @@ function biurnal_load(&$node) {
     $node->body = l(t('Preview scheme'), 'biurnal/preview/'. $node->nid);
   }
   
-  return $biurnal;
+  return $node;
 }
 
 function biurnal_scheme_form(&$node, $theme) {

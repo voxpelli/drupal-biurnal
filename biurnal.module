@@ -442,11 +442,13 @@ class Biurnal {
       $scheme = $this->get_scheme();
     }
     
-    if($scheme)
+    if($scheme && isset($scheme->palette[$theme_name]))
     {
       $palette = $scheme->palette[$theme_name];
-      foreach ($palette as $name => $color) {
-        $this->update_color($name, intval(substr($color, 1), 16));
+      if(is_array($palette)) {
+        foreach ($palette as $name => $color) {
+          $this->update_color($name, intval(substr($color, 1), 16));
+        }
       }
     }
     
