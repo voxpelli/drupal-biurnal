@@ -83,7 +83,9 @@ function biurnal_insert(&$node, $is_update=False) {
       $palette = $_biurnal_->get_colors_for_theme($theme->name);
       foreach( $palette as $name => $value ) {
         $field_name = 'biurnal_color_'. $theme->name .'_'. $name;
-        $node->palette[$theme->name][$name] = $node->$field_name;
+        if (isset($node->$field_name)) { //Check this to avoid nulling palette on non-form updates
+          $node->palette[$theme->name][$name] = $node->$field_name;
+        }
       }
     }
   }
