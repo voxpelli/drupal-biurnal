@@ -511,6 +511,7 @@ class Biurnal {
         }
 
         imagecopy($back, $img, 0, 0, 0, 0, $width, $height);
+        imagedestroy($img);
         
         //Run postpreocess operations
         if (isset($processes)) {
@@ -526,6 +527,7 @@ class Biurnal {
           unlink($file);
 
         imagepng($back, $file);
+        imagedestroy($back);
       }
     }
 
