@@ -514,7 +514,12 @@ class Biurnal {
       //Create new scheme files
       mkdir($this->scheme_path, 0777, true);
       file_put_contents($this->scheme_path .'/touch.txt', format_date(time()));
+      $this->scheme_path .= '/'. $this->scheme->changed;
+      mkdir($this->scheme_path, 0777, true);
       $this->process_scheme_resources();
+    }
+    else {
+      $this->scheme_path .= '/'. $this->scheme->changed;
     }
     
     foreach($this->colors as $name => $color) {
