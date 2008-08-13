@@ -189,6 +189,9 @@ class Biurnal {
     $this->biurnal_backgrounds = $this->biurnal_path .'/backgrounds';
     if (!is_dir($this->biurnal_backgrounds))
       mkdir($this->biurnal_backgrounds);
+      
+    //Get the active biurnal node
+    $this->scheme = $this->get_scheme();
   }
   
   public function resolve_path($path, $base) {
@@ -447,13 +450,12 @@ class Biurnal {
   }
   
   private function scheme_identifier() {
-    $ident = '';
-    foreach ($this->colors as $name => $color)
-      $ident .= substr($name, 0, 1) . substr($this->color_to_hex($color), 1);
-    
-    if (strlen($ident)>32)
-      $ident = md5($ident);
-    return $ident;
+    if(module_exists('pathauto')) {
+      return pathauto_cleanstring(mb_convert_case($this->scheme->title, MB_CASE_LOWER));
+    }
+    else {
+      return $this->scheme->nid;
+    }
   }
   
   public static function theme_head()
@@ -465,8 +467,8 @@ class Biurnal {
   }
   
   public function preprocess(&$vars) {
+    //Get theme name and json
     $theme_name = basename(path_to_theme());
-  
     $this->biurnal_theme_path = path_to_theme() .'/biurnal';
     if (is_dir($this->biurnal_theme_path)) {
       $this->load_json($this->biurnal_theme_path .'/biurnal.json');
@@ -479,37 +481,45 @@ class Biurnal {
         $this->load_json($this->biurnal_theme_path .'/biurnal.json');
       }
     }
-
-    //Do some loading of colors/settings
-    if($vars['node'] && $vars['node']->type=="biurnal") {
-      $scheme = $vars['node'];
-    }
-    else {
-      $scheme = $this->get_scheme();
+    
+    //Allow the current node to override the theme in use
+    if(isset($vars['node']) && $vars['node']->type=='biurnal') {
+      $this->scheme = $vars['node'];
     }
     
-    if($scheme && isset($scheme->palette[$theme_name]))
-    {
-      $palette = $scheme->palette[$theme_name];
-      if(is_array($palette)) {
-        foreach ($palette as $name => $color) {
-          $this->update_color($name, intval(substr($color, 1), 16));
+    //Create a mock-scheme with the default values so that we never get a blank page
+    if(!isset($this->scheme) || !$this->scheme) {
+      $this->scheme = (object)array('nid'=>0, 'title'=>'default', 'changed'=>0);
+    }
+    else { //Read the colors from the biurnal node
+      if(isset($this->scheme->palette[$theme_name])) {
+        $palette = $this->scheme->palette[$theme_name];
+        if(is_array($palette)) {
+          foreach ($palette as $name => $color) {
+            $this->update_color($name, intval(substr($color, 1), 16));
+          }
         }
       }
+    }
+    
+    //Check if the needs to be created or recreated
+    $this->scheme_path = sprintf('%s/%s/%s', $this->biurnal_path, $theme_name, $this->scheme_identifier());
+    if (!is_dir($this->scheme_path) || $this->scheme->changed > filemtime($this->scheme_path .'/touch.txt')) {
+      //Delete old files
+      if(is_dir($this->scheme_path)) {
+        _biurnal_rm_recursive($this->scheme_path);
+      }
+
+      //Create new scheme files
+      mkdir($this->scheme_path, 0777, true);
+      file_put_contents($this->scheme_path .'/touch.txt', format_date(time()));
+      $this->process_scheme_resources();
     }
     
     foreach($this->colors as $name => $color) {
       $vars['colors'][$name] = $this->color_to_hex($color);
       $vars['colors'][$name .'_triplet'] = $color;
     }
-  
-    //Check if the sceme exists
-    $this->scheme_path = sprintf('%s/%s/%s', $this->biurnal_path, $theme_name, $this->scheme_identifier());
-    if (!is_dir($this->scheme_path)) {
-      mkdir($this->scheme_path, 0777, true);
-    }
-    
-    $this->process_scheme_resources();
   
     foreach ($this->css as $css) {
       $name = basename($css);
