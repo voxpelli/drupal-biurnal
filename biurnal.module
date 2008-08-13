@@ -189,9 +189,6 @@ class Biurnal {
     $this->biurnal_backgrounds = $this->biurnal_path .'/backgrounds';
     if (!is_dir($this->biurnal_backgrounds))
       mkdir($this->biurnal_backgrounds);
-      
-    //Get the active biurnal node
-    $this->scheme = $this->get_scheme();
   }
   
   public function resolve_path($path, $base) {
@@ -450,7 +447,7 @@ class Biurnal {
   }
   
   private function scheme_identifier() {
-    if(module_exists('pathauto')) {
+    if(module_exists('pathauto') && function_exists('pathauto_cleanstring')) {
       return pathauto_cleanstring(mb_convert_case($this->scheme->title, MB_CASE_LOWER));
     }
     else {
@@ -485,6 +482,10 @@ class Biurnal {
     //Allow the current node to override the theme in use
     if(isset($vars['node']) && $vars['node']->type=='biurnal') {
       $this->scheme = $vars['node'];
+    }
+    else {
+      //Get the active biurnal node
+      $this->scheme = $this->get_scheme();
     }
     
     //Create a mock-scheme with the default values so that we never get a blank page
