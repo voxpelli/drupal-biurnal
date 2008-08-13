@@ -20,6 +20,10 @@ function biurnal_init() {
     actions_synchronize(False, True);
 }
 
+function biurnal_devel_block_links() {
+  return l(t('Flush biurnal cache'), 'biurnal/flush', 'Null', 'return_to='. urlencode($_GET['q']));
+}
+
 function biurnal_menu($may_cache)
 {
   $items = array();
@@ -28,6 +32,13 @@ function biurnal_menu($may_cache)
       'path' => 'biurnal/preview',
       'title' => t('Preview color scheme'),
       'callback' => 'biurnal_preview_scheme',
+      'access' => user_access('preview biurnal scheme'),
+      'type' => MENU_CALLBACK,
+    );
+    $items[] = array(
+      'path' => 'biurnal/flush',
+      'title' => t('Flush biurnal cache'),
+      'callback' => '_biurnal_flush_cache',
       'access' => user_access('preview biurnal scheme'),
       'type' => MENU_CALLBACK,
     );
@@ -63,6 +74,41 @@ function biurnal_preprocess_page(&$vars)
 {
   global $_biurnal_;
   $_biurnal_->preprocess($vars);
+}
+
+function _biurnal_flush_cache() {
+  $biurnal_path = file_directory_path() .'/biurnal';
+  
+  try {
+    if (_biurnal_rm_recursive($biurnal_path)) {
+      drupal_set_message(t('Biurnal cache cleared'), 'status');
+    }
+    else {
+      drupal_set_message(t('Error while clearing biurnal cache: @error', array('@error' => t('Couldn\'t erase directory'))), 'status');
+    }
+  } catch (Exception $e) {
+    drupal_set_message(t('Error while clearing biurnal cache: @error', array('@error' => $e->getMessage())), 'status');
+  }
+  
+  drupal_goto($_GET['return_to']);
+}
+
+function _biurnal_rm_recursive($filepath) {
+  if (is_dir($filepath) && !is_link($filepath)) {
+    if ($dh = opendir($filepath)) {
+      while (($sf = readdir($dh)) !== false) {
+        if ($sf == '.' || $sf == '..') {
+          continue;
+        }
+        if (!_biurnal_rm_recursive($filepath.'/'.$sf)) {
+          throw new Exception($filepath.'/'.$sf.' could not be deleted.');
+        }
+      }
+      closedir($dh);
+    }
+    return rmdir($filepath);
+  }
+  return unlink($filepath);
 }
 
 function biurnal_views_default_views()

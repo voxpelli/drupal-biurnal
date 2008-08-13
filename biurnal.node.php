@@ -55,14 +55,18 @@ function biurnal_form(&$node) {
       function_exists('gd_info') && 
       variable_get('file_downloads', FILE_DOWNLOADS_PUBLIC) == FILE_DOWNLOADS_PUBLIC) 
     {
-      $form['color'] = array(
+      $form['biurnal_color'] = array(
         '#type' => 'fieldset',
         '#title' => t('Color scheme for %name', array('%name'=>$theme->name)),
         '#weight' => -1,
         '#attributes' => array('class' => 'biurnal_color_scheme_form'),
         '#theme' => 'biurnal_scheme_form',
       );
-      $form['color'] += biurnal_scheme_form($node, $theme);
+      $form['biurnal_color_present'] = array(
+        '#type' => 'hidden',
+        '#value' => true,
+      );
+      $form['biurnal_color'] += biurnal_scheme_form($node, $theme);
     }
   }
 
@@ -76,15 +80,12 @@ function biurnal_update(&$node) {
 function biurnal_insert(&$node, $is_update=False) {
   global $_biurnal_;
   
-  $themes = list_themes();
-  $scheme = array();
-  foreach ($themes as $theme) {
-    if ($theme->status && $_biurnal_->theme_is_biurnal($theme->name)) {
-      $palette = $_biurnal_->get_colors_for_theme($theme->name);
-      foreach( $palette as $name => $value ) {
-        $field_name = 'biurnal_color_'. $theme->name .'_'. $name;
-        if (isset($node->$field_name)) { //Check this to avoid nulling palette on non-form updates
-          $node->palette[$theme->name][$name] = $node->$field_name;
+  if (isset($node->biurnal_color_present)) {
+    foreach ($node->palette as $theme_name => &$colors) {
+      foreach ($colors as $color_name => $color) {
+        $field_name = 'biurnal_color_'. $theme_name .'_'. $color_name;
+        if (isset($node->$field_name)) {
+          $colors[$color_name] = $node->$field_name;
         }
       }
     }
