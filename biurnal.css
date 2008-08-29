@@ -1,28 +1,22 @@
 /* $Id$ */
-.biurnal-form .biurnal-farbtastic-placeholder
+.biurnal-color-scheme-form .biurnal-farbtastic-placeholder
 {
   float: right;
   margin-bottom: 6px;
 }
 
-.biurnal-form .palette
+.biurnal-color-scheme-form .form-item
 {
-}
-
-.biurnal-form .form-item
-{
-  clear: left;
-}
-
-.biurnal-form .palette .form-item
-{
-  clear: none;
   width: 95px;
   float: left;
 }
 
-.biurnal-form .palette .form-item label
+.biurnal-color-scheme-form .form-item label
 {
   line-height: 1em;
   height: 2em;
+}
+
+.biurnal-color-scheme-form #edit-backgrounds-dinby-wrapper {
+  clear: left;
 }

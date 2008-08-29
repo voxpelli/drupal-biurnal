@@ -1,14 +1,21 @@
 <?php
 // $Id$
+function biurnal_schema() {
+  $schema = array();
+  $schema['biurnal_configuration'] = array(
+    'fields' => array(
+      'nid' => array('type' => 'serial', 'not null' => TRUE, 'disp-width' => '10'),
+      'configuration' => array('type' => 'text', 'not null' => TRUE),
+    ),
+    'primary key' => array('nid'),
+  );
+  return $schema;
+}
+
 function biurnal_install() {
-  db_query("CREATE TABLE if not exists {biurnal_configuration} (
-    nid int(10) unsigned NOT NULL PRIMARY KEY,
-    configuration text NOT NULL
-  )");
+  drupal_install_schema('biurnal');
 }
 
 function biurnal_uninstall() {
-  if (db_table_exists('biurnal_configuration')) {
-    db_query("DROP TABLE {biurnal_configuration}");
-  }
+  drupal_uninstall_schema('biurnal');
 }

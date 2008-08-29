@@ -4,7 +4,7 @@ if (Drupal.jsEnabled)
 {
   jQuery(document).ready(function () 
   {
-    var form = jQuery('.biurnal_color_scheme_form .biurnal-form');
+    var form = jQuery('.biurnal-color-scheme-form');
     var inputs = [];
     var hooks = [];
     var locks = [];
@@ -64,7 +64,7 @@ if (Drupal.jsEnabled)
     }
 
     // Initialize color fields
-    jQuery('.palette .form-text', form).each(function () 
+    jQuery('.form-text', form).each(function () 
     {
       // Extract palette field name
       this.key = this.id.substring(13);

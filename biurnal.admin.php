@@ -1,32 +1,6 @@
 <?php
 // $Id$
 
-/**
- * Implementation of hook_form_alter().
- */
-function biurnal_form_alter($form_id, &$form) 
-{
-  global $_biurnal_;
-  
-  // Insert the color changer into the theme settings page.
-  // TODO: Last condition in the following if disables color changer when private files are used this should be solved in a different way. See issue #92059.
-  if ($form_id == 'system_theme_settings' && 
-    $_biurnal_->theme_is_biurnal(arg(4)) &&
-    function_exists('gd_info') && 
-    variable_get('file_downloads', FILE_DOWNLOADS_PUBLIC) == FILE_DOWNLOADS_PUBLIC) 
-  {
-    $form['color'] = array(
-      '#type' => 'fieldset',
-      '#title' => t('Biurnal color scheme'),
-      '#weight' => -1,
-      '#attributes' => array('id' => 'biurnal_color_scheme_form'),
-      '#theme' => 'biurnal_scheme_form',
-    );
-    $form['color'] += biurnal_scheme_form(arg(4));
-    $form['#submit']['biurnal_scheme_form_submit'] = array();
-  }
-}
-
 function biurnal_scheme_form($theme) 
 {
   global $_biurnal_;
@@ -49,7 +23,6 @@ function biurnal_scheme_form($theme)
     'bottom' => t('Header bottom'),
     'text' => t('Text color')
   );
-  $form['biurnal']['#tree'] = true;
   
   $palette = $_biurnal_->get_colors_for_theme(arg(4));
   foreach ($palette as $name => $value) {

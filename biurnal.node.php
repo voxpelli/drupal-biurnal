@@ -59,7 +59,7 @@ function biurnal_form(&$node) {
         '#type' => 'fieldset',
         '#title' => t('Color scheme for %name', array('%name'=>$theme->name)),
         '#weight' => -1,
-        '#attributes' => array('class' => 'biurnal_color_scheme_form'),
+        '#attributes' => array('class' => 'biurnal-color-scheme-form'),
         '#theme' => 'biurnal_scheme_form',
       );
       $form['biurnal_color_present'] = array(

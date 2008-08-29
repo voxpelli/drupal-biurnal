@@ -10,7 +10,7 @@ require('biurnal.actions.php');
 require('biurnal.node.php');
 
 function biurnal_perm() {
-  return array('view biurnal node', 'edit own biurnal node', 'create biurnal node', 'edit all biurnal nodes', 'preview biurnal scheme');
+  return array('view biurnal node', 'edit own biurnal node', 'create biurnal node', 'edit all biurnal nodes', 'preview biurnal scheme', 'administer biurnal scheme');
 }
 
 function biurnal_init() {
@@ -24,42 +24,36 @@ function biurnal_devel_block_links() {
   return l(t('Flush biurnal cache'), 'biurnal/flush', 'Null', 'return_to='. urlencode($_GET['q']));
 }
 
-function biurnal_menu($may_cache)
+function biurnal_menu()
 {
+  global $_biurnal_;
   $items = array();
-  if ($may_cache) {
-    $items[] = array(
-      'path' => 'biurnal/preview',
-      'title' => t('Preview color scheme'),
+  $items['biurnal/preview/%nid'] = array(
+    'title' => t('Preview color scheme'),
+    'callback' => 'biurnal_preview_scheme',
+    'access' => user_access('preview biurnal scheme'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['biurnal/flush'] = array(
+    'title' => t('Flush biurnal cache'),
+    'callback' => '_biurnal_flush_cache',
+    'access' => user_access('administer biurnal scheme'),
+    'type' => MENU_CALLBACK,
+  );
+
+  if ($_biurnal_->preview_scheme()) {
+    $items['biurnal/stop_preview'] = array(
+      'title' => t('Stop preview of color scheme'),
       'callback' => 'biurnal_preview_scheme',
       'access' => user_access('preview biurnal scheme'),
-      'type' => MENU_CALLBACK,
+      'type' => MENU_NORMAL_ITEM,
     );
-    $items[] = array(
-      'path' => 'biurnal/flush',
-      'title' => t('Flush biurnal cache'),
-      'callback' => '_biurnal_flush_cache',
-      'access' => user_access('preview biurnal scheme'),
-      'type' => MENU_CALLBACK,
-    );
-  }
-  else {
-    global $_biurnal_;
-    if ($_biurnal_->preview_scheme()) {
-      $items[] = array(
-        'path' => 'biurnal/stop_preview',
-        'title' => t('Stop preview of color scheme'),
-        'callback' => 'biurnal_preview_scheme',
-        'access' => user_access('preview biurnal scheme'),
-        'type' => MENU_NORMAL_ITEM,
-      );
-    }
   }
 
   return $items;
 }
 
-function biurnal_preview_scheme($nid=Null) {
+function biurnal_preview_scheme($nid) {
   global $_biurnal_;
   if (isset($nid)) {
     $_biurnal_->preview_scheme($nid);
