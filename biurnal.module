@@ -15,9 +15,6 @@ function biurnal_perm() {
 
 function biurnal_init() {
   global $_biurnal_;
-  $_biurnal_->init();
-  if (is_callable('actions_synchronize'))
-    actions_synchronize(False, True);
 }
 
 function biurnal_devel_block_links() {
@@ -45,6 +42,11 @@ function biurnal_menu($may_cache)
   }
   else {
     global $_biurnal_;
+    
+    $_biurnal_->init();
+    if (is_callable('actions_synchronize'))
+      actions_synchronize(False, True);
+    
     if ($_biurnal_->preview_scheme()) {
       $items[] = array(
         'path' => 'biurnal/stop_preview',
@@ -183,6 +185,7 @@ class Biurnal {
   
   public function init() {
     $this->biurnal_path = file_directory_path() .'/biurnal';
+    
     if (!is_dir($this->biurnal_path))
       mkdir($this->biurnal_path);
       

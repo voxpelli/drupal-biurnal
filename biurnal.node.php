@@ -80,6 +80,9 @@ function biurnal_update(&$node) {
 function biurnal_insert(&$node, $is_update=False) {
   global $_biurnal_;
   
+  //Get default configuration if we don't have a palette
+  biurnal_default_palette($node);
+  
   if (isset($node->biurnal_color_present)) {
     foreach ($node->palette as $theme_name => &$colors) {
       foreach ($colors as $color_name => $color) {
@@ -100,16 +103,10 @@ function biurnal_insert(&$node, $is_update=False) {
   }
 }
 
-function biurnal_load(&$node) {
+function biurnal_default_palette(&$node) {
   global $_biurnal_;
   
-  //Fetch config from database
-  $bc = db_fetch_object(db_query('SELECT configuration FROM {biurnal_configuration} WHERE nid = %d', $node->nid));
-  if ($bc) {
-    $node->palette = unserialize($bc->configuration);
-  }
-  
-  //Get default configuration if load failed
+  // Do not replace existing palette
   if(!isset($node->palette) || !$node->palette) {
     $themes = list_themes();
     $scheme = array();
@@ -122,8 +119,21 @@ function biurnal_load(&$node) {
         }
       }
     }
-    $biurnal->palette = $scheme;
+    $node->palette = $scheme;
   }
+}
+
+function biurnal_load(&$node) {
+  global $_biurnal_;
+  
+  //Fetch config from database
+  $bc = db_fetch_object(db_query('SELECT configuration FROM {biurnal_configuration} WHERE nid = %d', $node->nid));
+  if ($bc) {
+    $node->palette = unserialize($bc->configuration);
+  }
+  
+  //Get default configuration if load failed
+  biurnal_default_palette($node);
 
   if($_biurnal_->preview_scheme() == $node->nid) {
     $node->body = l(t('Stop previewing scheme'), 'biurnal/stop_preview');
