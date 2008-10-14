@@ -19,7 +19,7 @@ function biurnal_set_brightness($color, $brightness)
 {
   $hsb = biurnal_RGBtoHSB($color);
   $hsb[BIURNAL_BRIGHTNESS] = min(abs($brightness),1.0);
-  var_dump($hsb);
+
   return biurnal_HSBtoRGB($hsb);
 }
 
