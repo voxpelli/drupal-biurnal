@@ -1,11 +1,22 @@
 <?php
 // $Id$
+/**
+ * @file
+ * Install file for Biurnal to setup the module
+ */
 function biurnal_schema() {
   $schema = array();
   $schema['biurnal_configuration'] = array(
     'fields' => array(
-      'nid' => array('type' => 'serial', 'not null' => TRUE, 'disp-width' => '10'),
-      'configuration' => array('type' => 'text', 'not null' => TRUE),
+      'nid' => array(
+        'type'       => 'serial',
+        'not null'   => TRUE,
+        'disp-width' => '10',
+      ),
+      'configuration' => array(
+        'type'     => 'text',
+        'not null' => TRUE,
+      ),
     ),
     'primary key' => array('nid'),
   );
