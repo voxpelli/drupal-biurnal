@@ -16,15 +16,13 @@ function biurnal_node_info() {
   );
 }
 
-function biurnal_access($op, $node) {
-  global $user;
-
+function biurnal_access($op, $node, $account) {
   if ($op == 'create') {
-    return user_access('create biurnal node');
+    return user_access('create biurnal node', $account);
   }
 
   if ($op == 'update' || $op == 'delete') {
-    if (user_access('edit all biurnal nodes') || (user_access('edit own biurnal node') && ($user->uid == $node->uid))) {
+    if (user_access('edit all biurnal nodes', $account) || (user_access('edit own biurnal node', $account) && ($account->uid == $node->uid))) {
       return TRUE;
     }
   }

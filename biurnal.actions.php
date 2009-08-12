@@ -11,10 +11,10 @@
 function biurnal_action_info() {
   return array(
     'biurnal_set_color_scheme_action' => array(
-      'description' => t('Change the color scheme of the site'),
-      'type' => 'system',
-      'configurable' => True,
-      'hooks' => array()
+      'description'  => t('Change the color scheme of the site'),
+      'type'         => 'system',
+      'configurable' => TRUE,
+      'hooks'        => array()
     ),
   );
 }
@@ -42,9 +42,9 @@ function biurnal_set_color_scheme_action_form($context) {
 }
 
 //TODO: This function needs to be fixed
-function biurnal_set_color_scheme_action_submit($form_id, $form_values) {
+function biurnal_set_color_scheme_action_submit($form, $form_state) {
   $params = array(
-    'theme_selector' => $form_values['theme_selector'],
+    'theme_selector' => $form_state['values']['theme_selector'],
   );
   return $params;
 }

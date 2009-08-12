@@ -65,11 +65,11 @@ function biurnal_scheme_form($theme) {
   return $form;
 }
 
-function biurnal_scheme_form_submit($form_id, $values) {
+function biurnal_scheme_form_submit($form, &$form_state) {
   global $_biurnal_;
   $palette = $_biurnal_->get_colors_for_theme(arg(4));
   foreach ($palette as $name => $value) {
-    $palette[$name]=$values['biurnal_color_' . $name];
+    $palette[$name]=$form_state['values']['biurnal_color_' . $name];
   }
 
   $_biurnal_->set_colors_for_theme(arg(4), $palette);
