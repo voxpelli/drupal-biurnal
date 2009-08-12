@@ -1,12 +1,18 @@
 <?php
 // $Id$
-require('biurnal.hsb.php');
+
+/**
+ * @file
+ * Main module file
+ */
+
+module_load_include('hsb.inc', 'biurnal');
 
 global $_biurnal_;
 $_biurnal_ = new Biurnal();
 
-require('biurnal.actions.php');
-require('biurnal.node.php');
+module_load_include('actions.inc', 'biurnal');
+module_load_include('node.inc', 'biurnal');
 
 function biurnal_perm() {
   return array(

@@ -42,18 +42,16 @@ function biurnal_form(&$node) {
     '#weight'        => -5
   );
 
-  // Add Farbtastic color picker
-  drupal_add_css('misc/farbtastic/farbtastic.css', 'module', 'all', FALSE);
-  drupal_add_js('misc/farbtastic/farbtastic.js');
-
   // Add custom CSS/JS
   drupal_add_css($base .'/biurnal.css', 'module', 'all', FALSE);
   drupal_add_js($base .'/biurnal.js');
 
   $themes = list_themes();
+  $biurnal_themes = FALSE;
 
   foreach ($themes as $theme) {
     if ($theme->status && $_biurnal_->theme_is_biurnal($theme->name) && function_exists('gd_info') && variable_get('file_downloads', FILE_DOWNLOADS_PUBLIC) == FILE_DOWNLOADS_PUBLIC) {
+      $biurnal_themes = TRUE;
       $form['biurnal_color'] = array(
         '#type'       => 'fieldset',
         '#title'      => t('Color scheme for %name', array('%name' => $theme->name)),
@@ -67,6 +65,12 @@ function biurnal_form(&$node) {
       );
       $form['biurnal_color'] += biurnal_scheme_form($node, $theme);
     }
+  }
+
+  if ($biurnal_themes) {
+    // Add Farbtastic color picker
+    drupal_add_css('misc/farbtastic/farbtastic.css', 'module', 'all', FALSE);
+    drupal_add_js('misc/farbtastic/farbtastic.js');
   }
 
   return $form;

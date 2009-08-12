@@ -4,6 +4,7 @@
 /**
  * @file
  * Admin callbacks for Birunal
+ * TODO: This isn't used anymore?
  */
 
 function biurnal_scheme_form($theme) {
