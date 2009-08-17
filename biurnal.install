@@ -6,19 +6,79 @@
  */
 function biurnal_schema() {
   $schema = array();
-  $schema['biurnal_configuration'] = array(
-    'fields' => array(
-      'nid' => array(
-        'type'       => 'serial',
-        'not null'   => TRUE,
-        'disp-width' => '10',
-      ),
-      'configuration' => array(
-        'type'     => 'text',
-        'not null' => TRUE,
+  $schema['biurnal'] = array(
+    'description' => 'The table for Biurnal color schemes configurations.',
+    'export' => array(
+      'api' => array(
+        'owner' => 'biurnal',
+        'api'   => 'biurnal_conf',
+        'minimum_version' => 1,
+        'current_version' => 1,
       ),
     ),
-    'primary key' => array('nid'),
+/*
+    'export' => array(
+      'key' => 'name',
+      'object' => 'stdClass',
+      'status' => 'default_' . $table,
+      'default hook' => 'default_' . $table,
+      'can disable' => TRUE,
+      'identifier' => $table,
+      'bulk export' => TRUE,
+      'export callback' => "$schema[module]_export_{$table}",
+      'list callback' => "$schema[module]_{$table}_list",
+      'to hook code callback' => "$schema[module]_{$table}_to_hook_code",
+    ),
+*/
+    'fields' => array(
+      'sid' => array(
+        'description' => 'The primary identifier for a color scheme configuration.',
+        'type'        => 'serial',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'no export'   => TRUE,
+      ),
+      'name' => array(
+        'type'        => 'varchar',
+        'length'      => '32',
+        'default'     => '',
+        'not null'    => TRUE,
+        'description' => 'Unique ID for this task handler. Used to identify it programmatically.',
+      ),
+      'scheme' => array(
+        'type'        => 'varchar',
+        'length'      => '64',
+        'default'     => '',
+        'not null'    => TRUE,
+        'description' => 'Name of the scheme the configuration is made for.',
+      ),
+      'tag' => array(
+        'type'        => 'varchar',
+        'length'      => '255',
+        'default'     => '',
+        'not null'    => TRUE,
+        'description' => 'A tag used to group/sort schemes.',
+      ),
+      'weight' => array(
+        'type'        => 'int',
+        'description' => 'The order in which this scheme is applied. Lower numbers go first.',
+      ),
+      'conf' => array(
+        'type'           => 'text',
+        'size'           => 'big',
+        'description'    => 'Serialized configuration of the scheme.',
+        'not null'       => TRUE,
+        'serialize'      => TRUE,
+        'object default' => array(),
+      ),
+    ),
+    'primary key' => array('sid'),
+    'unique keys' => array(
+      'name' => array('name'),
+    ),
+    'indexes' => array(
+      //TODO: Complete these index!
+    ),
   );
   return $schema;
 }

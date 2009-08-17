@@ -1,7 +1,8 @@
 ; $Id$
 name = "Biurnal"
 description = "Makes it possible to make color changes for a site"
-version = "6.x-0.1"
+version = "6.x-1.x-dev"
 core = "6.x"
 php = "5.x"
-project = "biurnal"
+dependencies[] = ctools
+dependencies[] = autoload
